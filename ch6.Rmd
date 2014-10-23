@@ -20,7 +20,7 @@ library(R2jags)
 library(gridExtra)
 library(reshape2)
 
-setwd("/Users/mht/Documents/learning/tfbt/Lee&Wagenmakers/Code/ParameterEstimation/DataAnalysis")
+setwd("/Users/mht/Documents/learning/tfbt/Lee&Wagenmakers/Code/ParameterEstimation/LatentMixtures")
 
 
 cat('# Exam Scores
@@ -313,7 +313,7 @@ model{
   predphi ~ dnorm(mu,lambda)T(0,1)
 }', file={f<-tempfile()})
 
-k <- c(21,17,21,18,22,31,31,34,34,35,35,36,39,36,35)
+k <- c(21,17,21,18,22,31,31,34,34,35,35,36,39,36,35,28,28,28,28,28)
 p <- length(k) #number of people
 n <- 40 # number of questions
 
@@ -344,7 +344,8 @@ a<-qplot(data=melt(df$mu),x=value,geom='histogram',binwidth=0.008)+
 
 b<-ggplot(melt(df[,c('z.1','z.2','z.3','z.4','z.5',
                      'z.6','z.7','z.8','z.9','z.10',
-                     'z.11','z.12','z.13','z.14','z.15')])
+                     'z.11','z.12','z.13','z.14','z.15',
+                     'z.16','z.17','z.18','z.19','z.20')])
           ,aes(x=factor(value),fill=factor(value)))+
   facet_wrap(~variable,scales='fixed')+
   geom_histogram(binwidth=0.1)+
@@ -364,7 +365,7 @@ Compare the results of the hierarchical model with the original model that did n
 Interpret the posterior distribution of the variable predphi. How does this distribution relate to the posterior distribution for mu?
 
 ```{r 6.2.2,fig.width=10, fig.height=4}
-#quartz('6.2.2 posterior of predphi')
+quartz('6.2.2 posterior of predphi')
 qplot(data=melt(df$predphi),x=value,geom='histogram',binwidth=0.008)+
   theme_bw()+
   xlab('posterior predictive phi')+
@@ -1221,10 +1222,10 @@ model{
   alpha[2] <- mumal * lambdamal
   beta[2]  <- lambdamal * (1-mumal)
   # Priors
-  mubon ~ dbeta(1,1)
+  mubon ~ dbeta(1,1) # uniform over coin weights
   mudiff ~ dnorm(0,0.5)T(0,) # Constrained to be Positive
-  lambdabon ~ dunif(40,800)
-  lambdamal ~ dunif(4,100)
+  lambdabon ~ dunif(40,800) # higher precision for bonafide?
+  lambdamal ~ dunif(4,100) # lower precision for malingerer?
 }
 ',file={f<-tempfile()})
 
@@ -1258,11 +1259,11 @@ df<-data.frame(theta = samples$BUGSoutput$sims.list$theta,
                mudiff = samples$BUGSoutput$sims.list$mudiff,
                phi = samples$BUGSoutput$sims.list$phi)
 
-qplot(data=melt(df$mumal),
+qplot(data=melt(df$phi),
   x=value,geom='histogram',binwidth=0.02)+
   theme_bw()+
   xlim(0,1)+
-  xlab('mu malingerers')
+  xlab('phi (proportion of malingerers)')
 ```
 
 ### Exercise 6.6.1 
@@ -1276,6 +1277,227 @@ Yes. It's about 0.5, and we know there were 10 bona fide and 12 malingerers in t
 
 Assume you know that the base rate of malingering is 10%. Change the WinBUGS script to reflect this knowledge. Do you expect any differences?
 
+```{r 6.6.2}
+cat('# Malingering, with Individual Differences
+model{
+  # Each Person Belongs to One of Two Latent Groups
+  for (i in 1:p){
+    z[i] ~ dbern(phi) # phi is the Base Rate
+    z1[i] <- z[i]+1
+  }
+  # Base Rate set to 0.1
+  phi <- 0.1
+  # Data are Binomial with Rate Given by 
+  # Each Personís Group Assignment
+  for (i in 1:p){
+    k[i] ~ dbin(theta[i,z1[i]],n)
+    theta[i,1] ~ dbeta(alpha[1],beta[1])
+    theta[i,2] ~ dbeta(alpha[2],beta[2])
+  }
+  # Transformation to Group Mean and Precision
+  alpha[1] <- mubon * lambdabon
+  beta[1] <- lambdabon * (1-mubon)
+  # Additivity on Logit Scale
+  logit(mumal) <- logit(mubon) - mudiff
+  alpha[2] <- mumal * lambdamal
+  beta[2]  <- lambdamal * (1-mumal)
+  # Priors
+  mubon ~ dbeta(1,1) # uniform over coin weights
+  mudiff ~ dnorm(0,0.5)T(0,) # Constrained to be Positive
+  lambdabon ~ dunif(40,800) # higher precision for bonafide?
+  lambdamal ~ dunif(4,100) # lower precision for malingerer?
+}
+',file={f<-tempfile()})
+
+k <- c(45,45,44,45,44,45,45,45,45,45,30,20,6,44,44,27,25,17,14,27,35,30)
+p <- length(k) # number of people
+n <- 45        # number of questions
+
+data <- list("p", "k", "n") # to be passed on to JAGS
+myinits <- list(
+  list(z = round(runif(p)), mudiff=0.2),
+  list(z = round(runif(p)), mudiff=0.3),
+  list(z = round(runif(p)), mudiff=0.4)) 
+
+# parameters to be monitored:  
+parameters <- c("theta","z","mubon","lambdabon",
+               "mumal","lambdamal","mudiff")
+
+# The following command calls JAGS with specific options.
+# For a detailed description see the R2jags documentation.
+samples <- jags(data, inits=myinits, parameters,
+               model.file = f, n.chains=3, n.iter=10000, 
+               n.burnin=1000, n.thin=1, DIC=T)
+
+
+df2<-data.frame(theta = samples$BUGSoutput$sims.list$theta,
+               z = samples$BUGSoutput$sims.list$z,
+               mubon = samples$BUGSoutput$sims.list$mubon,
+               lambdabon = samples$BUGSoutput$sims.list$lambdabon,
+               mumal = samples$BUGSoutput$sims.list$mumal,
+               lambdamal = samples$BUGSoutput$sims.list$lambdamal,
+               mudiff = samples$BUGSoutput$sims.list$mudiff)
+
+a<-qplot(data=melt(df$mumal),
+  x=value,geom='histogram',binwidth=0.02)+
+  theme_bw()+
+  xlim(0,1)+
+  xlab('mu malingerers, unknown phi')
+
+b<-qplot(data=melt(df2$mumal),
+  x=value,geom='histogram',binwidth=0.02)+
+  theme_bw()+
+  xlim(0,1)+
+  xlab('mu malingerers, phi = 0.1')
+
+c<-qplot(data=melt(df$mubon),
+  x=value,geom='histogram',binwidth=0.02)+
+  theme_bw()+
+  xlim(0,1)+
+  xlab('mu bonafide, unknown phi')
+
+d<-qplot(data=melt(df2$mubon),
+  x=value,geom='histogram',binwidth=0.02)+
+  theme_bw()+
+  xlim(0,1)+
+  xlab('mu bonafide, phi = 0.1')
+
+grid.arrange(a,b,c,d,nrow=2)
+```
+
+
+# 6.7 Alzheimer's recall test cheating
+
+Simple recognition and recall tasks are an important part of screening for Alzheimer’s Disease and Related Disorders (ADRD), and are sometimes administered over the telephone. This practice raises the possibility of people cheating by, for example, writing down the words they are being asked to remember.
+
+By design, there are 61 bona fide people who are known to have done the task as intended, and 57 people who are known to have cheated.
+
+```{r 6.7.1}
+
+cat('# Cheating Latent Mixture Model
+model{
+  # Each Person Belongs to One of Two Latent Groups
+  for (i in 1:p){
+     z[i] ~ dbern(phi) # phi is the Base Rate
+     z1[i] <- z[i]+1
+  }
+  # Relatively Uninformative Prior on Base Rate
+  phi ~ dbeta(5,5) 
+  # Data are Binomial with Rate Given by 
+  # Each Personís Group Assignment
+  for (i in 1:p){
+    k[i] ~ dbin(theta[i,z1[i]],n)
+    thetatmp[i,1] ~ dbeta(alpha[1],beta[1])
+    theta[i,1] <- max(.01,min(.99,thetatmp[i,1]))
+    thetatmp[i,2] ~ dbeta(alpha[2],beta[2])
+    theta[i,2] <- max(.01,min(.99,thetatmp[i,2]))
+  }
+  # Transformation to Group Mean and Precision
+  alpha[1] <- mubon * lambdabon
+  beta[1] <- lambdabon * (1-mubon)
+  # Additivity on Logit Scale
+  logit(muche) <- logit(mubon) + mudiff # Note the "+"
+  alpha[2] <- muche * lambdache
+  beta[2] <- lambdache * (1-muche)
+  # Priors
+  mubon ~ dbeta(1,1)
+  mudiff ~ dnorm(0,0.5)T(0,) # Constrained to be Positive
+  lambdabon ~ dunif(5,50)
+  lambdache ~ dunif(5,50)
+  # Correct Count
+  for (i in 1:p){
+    pct[i] <- equals(z[i],truth[i])
+  }
+  pc <- sum(pct[1:p])
+}',file={f<-tempfile()})
+
+cheat.dat  <- read.table("cheat.csv",header=F,sep=",")
+cheatt.dat <- read.table("cheatt.csv",header=F,sep="")
+truth <- cheatt.dat$V1 #truth = 1 if cheater
+k <- apply(cheat.dat,1,sum) # total correct per participant
+p <- length(k) # number of people
+n <- 40        # total trials
+
+data <- list("p", "k", "n", "truth") # to be passed on to JAGS
+myinits <- list(
+  list(z = round(runif(p)), mudiff=0.1, phi=0.5, mubon=0.5, lambdabon=30, lambdache=25),
+  list(z = round(runif(p)), mudiff=0.15, phi=0.5, mubon=0.5, lambdabon=25, lambdache=30)
+  ) 
+
+# parameters to be monitored:  
+parameters <- c("theta","z","mubon","lambdabon",
+               "muche","lambdache","mudiff","phi","alpha","beta","pc")
+
+set.seed(3) # some chains result in "undefined real result -- see box & exercise"
+
+samples = jags(data, inits=myinits, parameters,
+               model.file =f, n.chains=2, n.iter=6000, 
+               n.burnin=3000, n.thin=1, DIC=T)
+               
+pc <- samples$BUGSoutput$sims.list$pc/p #to get proportion correct
+dfa<- rbind(data.frame(recalled=k[truth==0],group = 'bonafide'),
+            data.frame(recalled=k[truth==1],group = 'cheat'))
+  
+
+qplot(data=dfa,x=recalled,geom='histogram',fill=group, binwidth=1,
+      position='dodge')+
+      theme_bw()
+
+mean(pc)
+
+# plot 6.9
+#make the two panel plot:
+windows(width=8,height=6) #this command works only under Windows!
+layout(matrix(c(1,2),2,1))
+layout.show(2)
+par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, 
+    mgp = c(3.5, 1, 0), cex.lab = 1.5,
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+bins <- c(-1:n)+.5
+bonafide <- hist(k[truth==0], breaks=bins, plot=F)$counts
+cheat    <- hist(k[truth==1], breaks=bins, plot=F)$counts
+
+counts <- rbind(bonafide, cheat)
+barplot(counts, main=" ", xlab=" ", col=c("grey","white"),
+  legend.text = c("Bona Fide","Cheater"), args.legend = list(x="topleft"),
+  beside=TRUE, axes=F)
+
+
+
+# bottom panel:
+par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+pc.line <- array()
+for (i in 1:41)
+{
+  pc.line[i] <- mean((k>=(i-1))==truth)
+}
+
+dev.new() # so the plot below does not overwrite the plot above
+
+plot(c(0:40), pc.line, type="l", lwd=2, xlim=c(0,40), ylim=c(0.4,1), 
+     xlab="Number of Items Recalled Correctly", 
+     ylab=" ", axes=F)
+axis(1, at=c(0,seq(from=5,by=5,to=40)))
+axis(2, at=c(.5,.75,1))
+par(las=0)
+mtext("Prop. Correct",side=2, line=2.5,cex=1.5)
+# Now add the distribution:
+pc.dens <- density(pc)
+polygon(c(0,pc.dens$y,0,0), c(pc.dens$x[1]-.01,pc.dens$x,pc.dens$x[1]+.01,pc.dens$x[1]-.01), col="green")
+
+
+# plot 6.10
+par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+plot(k,samples$BUGSoutput$mean$z,ylim=c(0,1),xlim=c(0,n), xlab= "Number of Items Recalled Correctly", 
+     ylab="Cheater Classification", lwd=2, pch=4) 
+#in the code, z=0 is bonafide and z=1 is cheating
+#so z gives the prob of being assigned to cheating group
+
+
+
+```
 
 
 
