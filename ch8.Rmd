@@ -539,9 +539,9 @@ ggplot(data=df.reduced)+
   xlab('Delta')
 ```
 
-8.3 Two sample
+# 8.3 Two sample
 
-```{r 8.3,fig.width=10, fig.height=4}
+```{r 8.3,fig.width=10, fig.height=4, echo=FALSE}
 cat('# Two-sample Comparison of Means
 model{ 
   # Data
@@ -552,19 +552,19 @@ model{
     y[j] ~ dnorm(muy,lambda)
   }
   # Means and precision
-  alpha <- delta*sigma
+  alpha <- delta*sigma # difference between means
   mux <- mu+alpha/2  
   muy <- mu-alpha/2
   lambda <- pow(sigma,-2)
   # delta, mu, and sigma Come From (Half) Cauchy Distributions
   lambdadelta ~ dchisqr(1)
-  delta ~ dnorm(0,lambdadelta)
+  delta ~ dnorm(0,lambdadelta) #diff / sigma
   lambdamu ~ dchisqr(1)
   mu ~ dnorm(0,lambdamu)
   lambdasigma ~ dchisqr(1)
   sigmatmp ~ dnorm(0,lambdasigma)
   sigma <- abs(sigmatmp)
-  # Sampling from Prior Distribution for Delta
+  # Prior predictive?
   lambdadeltaprior ~ dchisqr(1)
   deltaprior ~ dnorm(0,lambdadeltaprior)
 }',file={f<-tempfile()})
@@ -612,7 +612,110 @@ ci.hi<-qlogspline(0.975,fit.posterior)
 posterior<-dlogspline(0, fit.posterior) # pdf @ delta=0
 prior<-dcauchy(0) # height of order--restricted prior
 BF01<-posterior/prior # bayes factor
-BF01
+
+
+df$delta.prior<-rcauchy(length(df$delta.posterior),0,1)
+
+ggplot(data=df)+
+  geom_density(aes(x=delta.posterior),linetype='dashed')+
+  geom_density(aes(x=delta.prior))+
+  geom_point(x=0,y=prior,color='red')+
+  geom_point(x=0,y=posterior,color='blue')+
+  theme_bw()+
+  xlim(-3,3)+
+  #ylim(0,10)+
+  xlab('Delta')
+```
+
+Bayes factor is `r BF01` or 1 / `r 1/BF01`
+
+
+## Exercise 8.3.1 
+
+The two-sample comparison of means outlined above assumes that the two groups have equal variance. How can you extend the model when this assumption is not reasonable?
+
+
+```{r 8.3.1,fig.width=10, fig.height=4, echo=FALSE}
+cat('# Two-sample Comparison of Means; unequal variance
+model{ 
+  # Data
+  for (i in 1:n1){
+    x[i] ~ dnorm(mux,lambda)
+  }
+  for (j in 1:n2){
+    y[j] ~ dnorm(muy,lambda)
+  }
+  # Means and precision
+  alpha <- delta*sigma # difference between means
+  mux <- mu+alpha/2  
+  muy <- mu-alpha/2
+  lambda <- pow(sigma,-2)
+
+  sigma <- sqrt(((n1-1)*(sigmax^2)+(n2-1)*(sigmay^2))/(n1+n2-2))
+
+# delta, mu, and sigma Come From (Half) Cauchy Distributions
+  lambdadelta ~ dchisqr(1)
+  delta ~ dnorm(0,lambdadelta) #diff / sigma
+
+  lambdamu ~ dchisqr(1)
+  mu ~ dnorm(0,lambdamu)
+
+  lambdasigmax ~ dchisqr(1)
+  sigmatmpx ~ dnorm(0,lambdasigmax)
+  sigmax <- abs(sigmatmpx)
+  
+  lambdasigmay ~ dchisqr(1)
+  sigmatmpy ~ dnorm(0,lambdasigmay)
+  sigmay <- abs(sigmatmpy)
+  
+ # Prior predictive?
+  lambdadeltaprior ~ dchisqr(1)
+  deltaprior ~ dnorm(0,lambdadeltaprior)
+}',file={f<-tempfile()})
+
+
+
+# Read data Dr. Smith
+x <- c(70,80,79,83,77,75,84,78,75,75,78,82,74,81,72,70,75,72,76,77)
+y <- c(56,80,63,62,67,71,68,76,79,67,76,74,67,70,62,65,72,72,69,71)
+
+n1 <- length(x)
+n2 <- length(y)
+
+# Rescale
+y <- y - mean(x)
+y <- y/sd(x)
+x <- (x-mean(x))/sd(x); 
+
+data <- list("x", "y", "n1", "n2") # to be passed on to JAGS
+
+myinits <- list(
+  list(delta = rnorm(1,0,3), mu = rnorm(1,0,1), sigmatmpx = runif(1,0,5), sigmatmpy = runif(1,0,5)),
+  list(delta = rnorm(1,0,3), mu = rnorm(1,0,1), sigmatmpx = runif(1,0,5), sigmatmpy = runif(1,0,5)),
+  list(delta = rnorm(1,0,3), mu = rnorm(1,0,1), sigmatmpx = runif(1,0,5), sigmatmpy = runif(1,0,5)))
+
+# Parameters to be monitored
+parameters <- c("delta")
+
+# The following command calls JAGS with specific options.
+# For a detailed description see the R2jags documentation.
+samples <- jags(data, inits=myinits, parameters,
+     		model.file =f,
+	 			n.chains=3, n.iter=10000, n.burnin=5000, n.thin=1, DIC=T)
+
+df <- data.frame(delta.posterior=samples$BUGSoutput$sims.list$delta)
+
+# Fits a density using spliens to approx. log-density
+# uses 1997 knot and deletion algorithm
+fit.posterior<- logspline(df$delta.posterior)
+
+# 95% CI for log-density (of posterior of effect size)
+ci.low<-qlogspline(0.025,fit.posterior)
+ci.hi<-qlogspline(0.975,fit.posterior)
+
+posterior<-dlogspline(0, fit.posterior) # pdf @ delta=0
+prior<-dcauchy(0) # height of order--restricted prior
+BF01<-posterior/prior # bayes factor
 
 
 df$delta.prior<-rcauchy(length(df$delta.posterior),0,1)
@@ -629,13 +732,10 @@ ggplot(data=df)+
 ```
 
 
+Bayes factor is `r BF01` or 1 / `r 1/BF01`
 
 
-
-
-
-
-
+#Fin
 
 
 
