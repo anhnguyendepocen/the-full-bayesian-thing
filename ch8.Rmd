@@ -16,6 +16,7 @@ library(R2jags)
 library(gridExtra)
 library(reshape2)
 library(polspline)
+library(ggplot2)
 
 setwd("/Users/mht/Documents/learning/tfbt/Lee&Wagenmakers/Code/ModelSelection/Means/")
 
@@ -160,12 +161,14 @@ parameters <- c("delta")
 
 # The following command calls JAGS with specific options.
 # For a detailed description see the R2jags documentation.
-samples <- jags(data, inits=myinits, parameters,
+samples <- jags(
+  data, inits=myinits, parameters,
      		model.file =f,
 	 			n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1, DIC=T)
 
 
-df <- data.frame(delta.posterior=samples$BUGSoutput$sims.list$delta)
+df <- data.frame(delta.posterior=
+                   samples$BUGSoutput$sims.list$delta)
 
 # Fits a density using spliens to approx. log-density
 # uses 1997 knot and deletion algorithm
@@ -179,7 +182,8 @@ posterior<-dlogspline(0, fit.posterior) # pdf @ delta=0
 prior<-dcauchy(0) # height of order--restricted prior
 BF01<-posterior/prior # bayes factor
 
-df$delta.prior<-rcauchy(length(df$delta.posterior),0,1)
+df$delta.prior<-rcauchy(
+  length(df$delta.posterior),0,1)
 
 ggplot(data=df)+
   geom_density(aes(x=delta.posterior),linetype='dashed')+
@@ -581,9 +585,7 @@ n2 <- length(y)
 # Rescale
 y <- y - mean(x)
 y <- y/sd(x)
-x <- (x-mean(x))/sd(x); 
-
-data <- list("x", "y", "n1", "n2") # to be passed on to JAGS
+x <- (x-mean(x))/sd(x); data <- list("x", "y", "n1", "n2") # to be passed on to JAGS
 
 myinits <- list(
   list(delta = rnorm(1,0,3), mu = rnorm(1,0,1), sigmatmp = runif(1,0,5)),
@@ -718,7 +720,8 @@ prior<-dcauchy(0) # height of order--restricted prior
 BF01<-posterior/prior # bayes factor
 
 
-df$delta.prior<-rcauchy(length(df$delta.posterior),0,1)
+df$delta.prior<-rcauchy(
+  length(df$delta.posterior),0,1)
 
 ggplot(data=df)+
   geom_density(aes(x=delta.posterior),linetype='dashed')+
