@@ -1,0 +1,95 @@
+---
+title: "ch18"
+author: "mht"
+date: "December 2, 2014"
+output: html_document
+---
+
+# Ch 11: Signal detection theory
+
+
+```{r}
+rm(list=ls()) 
+
+library(reshape2)
+library(ggplot2)
+library(R2jags)
+
+
+cat('# Signal Detection Theory
+model{
+  for (i in 1:k){
+  # Observed counts
+    h[i] ~ dbin(thetah[i],s[i])
+    f[i] ~ dbin(thetaf[i],n[i])
+    # Reparameterization Using Equal-Variance Gaussian SDT
+    thetah[i] <- phi(d[i]/2-c[i])
+    thetaf[i] <- phi(-d[i]/2-c[i])
+    # These Priors over Discriminability and Bias Correspond 
+    # to Uniform Priors over the Hit and False Alarm Rates
+    d[i] ~ dnorm(0,0.5)
+    c[i] ~ dnorm(0,2)
+  }
+}',file={fle<-tempfile()})
+
+dataset <- 1
+
+if (dataset == 1) #Demo
+{
+  k <- 3 #number of cases
+  data <- matrix(c(70, 50, 30, 50, 7, 5, 3, 5, 10, 0, 0, 10), nrow=k, ncol=4, byrow=T)
+}
+
+if (dataset == 2) #Lehrner et al. (1995) data 
+{
+  k <- 3 #number of cases
+  data <- matrix(c(148, 29, 32, 151, 150, 40, 30, 140, 150, 51, 40, 139), nrow=k, ncol=4, byrow=T)
+}
+
+h <- data[,1]
+f <- data[,2]
+MI <- data[,3]
+CR <- data[,4]
+s <- h + MI
+n <- f + CR
+
+data <- list("h", "f", "k", "s", "n") # to be passed on to JAGS
+myinits <- list(
+  list(d = rep(0,k), c = rep(0,k)))  
+
+# parameters to be monitored:  
+parameters <- c("d", "c", "thetah", "thetaf")
+
+# The following command calls JAGS with specific options.
+# For a detailed description see the R2jags documentation.
+samples <- jags(data, inits=myinits, parameters,
+	 			model.file = fle, n.chains=1, n.iter=10000, n.burnin=1, n.thin=1)
+
+
+df<- data.frame(d1 = samples$BUGSoutput$sims.list$d[,1],
+              d2 = samples$BUGSoutput$sims.list$d[,2],
+              d3 = samples$BUGSoutput$sims.list$d[,3],
+              c1 = samples$BUGSoutput$sims.list$c[,1],
+              c2 = samples$BUGSoutput$sims.list$c[,2],
+              c3 = samples$BUGSoutput$sims.list$c[,3],
+              h1 = samples$BUGSoutput$sims.list$thetah[,1],
+              h2 = samples$BUGSoutput$sims.list$thetah[,2],
+              h3 = samples$BUGSoutput$sims.list$thetah[,3],
+              f1 = samples$BUGSoutput$sims.list$thetaf[,1],
+              f2 = samples$BUGSoutput$sims.list$thetaf[,2],
+              f3 = samples$BUGSoutput$sims.list$thetaf[,3])
+
+df.m<- melt(df)
+df.m$metric <- factor(substring(df.m$variable,1,1),levels=c('d','c','h','f'),
+                      labels=c('discriminability','bias','hit rate','false alarm rate'))
+df.m$dset <- factor(substring(df.m$variable,2,2),labels=c('h=70/100, f=50/100',
+                                                          'h=7/10, f=5/10',
+                                                          'h=10/10 f=0/10'))
+
+ggplot(df.m,aes(x=value,fill=dset))+
+  geom_density()+
+  facet_wrap(~metric,scale='free')+
+  theme_solarized()
+```
+
+
