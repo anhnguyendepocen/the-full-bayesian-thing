@@ -1,9 +1,8 @@
 tfbt
 ====
-The Full Bayesian Thing
+The Full Bayesian Thing, following Lee & Wagenmakers (2014) - Bayesian Cognitive Modeling
 
-ch*.Rmd are RMarkdown files of the exercises in Lee & Wagenmakers (2014) - Bayesian Cognitive Modeling
-
-*.ch files are Church versions of the chapter exercises
+1. *.Rmd are RMarkdown files of the exercises in L&W
+2. *.ch files are Church versions of the chapter exercises
 
 changes welcome
