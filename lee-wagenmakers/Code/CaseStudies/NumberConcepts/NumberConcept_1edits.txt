@@ -1,0 +1,68 @@
+# Knower Level Model Applied to Give-N Data
+model{
+  # Data (aka Linking Function action)
+  for (i in 1:ns){
+    for (j in 1:gnq[i]){  
+      # Probability a z[i]-Knower Will Answer ga[i,j] to Question gq[i,j]
+      # is a Categorical Draw From Their Distribution over the 1:gn Toys
+      ga[i,j] ~ dcat(npiprime[z[i],gq[i,j],1:gn]) #Normalized pi_prime (posterior)
+    }
+    # Posterior Predictive
+    for (j in 1:gn){
+      predga[i,j] ~ dcat(npiprime[z[i],j,1:gn])
+    }
+  }
+  # Model, where the magic happens
+  for (i in 1:nz){ # children
+    for (j in 1:gn){ # trial
+      for (k in 1:gn){ # number of toys / number in mind (1:15) [hypothesis space]
+
+        # Temporarily compute updated probs
+        piprimetmp[i,j,k,1] <- pi[k]
+        piprimetmp[i,j,k,2] <- 1/v*pi[k]
+        piprimetmp[i,j,k,3] <- v*pi[k]
+
+        # Will be 1 if Knower-Level (i.e, i-1) is Same or Greater than Answer
+        # should this be z[i]-1?
+        ind1[i,j,k] <- step((i-1)-k)
+
+        # Will be 1 for the Possible Answer that Matches the Question
+        ind2[i,j,k] <- equals(k,j)
+
+        # Will be 1 for 0-Knowers
+        ind3[i,j,k] <- equals(i,1)
+
+        # Will be 1 for HN-Knowers
+        ind4[i,j,k] <- equals(i,nz)
+        ind5[i,j,k] <- ind3[i,j,k]+ind4[i,j,k]*(2+ind2[i,j,k])
+                       + (1-ind4[i,j,k])*(1-ind3[i,j,k])
+                       * (ind1[i,j,k]+ind1[i,j,k]*ind2[i,j,k]+1)
+
+        piprime[i,j,k] <- piprimetmp[i,j,k,ind5[i,j,k]]
+        
+        npiprime[i,j,k] <- piprime[i,j,k]/sum(piprime[i,j,1:gn]) # Why is this in the k loop?
+      } 
+    }
+  }
+  # Posterior Prediction For Knower Levels
+  for (i in 1:nz){
+    for (j in 1:gn){
+      predz[i,j] ~ dcat(npiprime[i,j,1:gn])
+    }
+  }      
+  # Base rate ~ Dir(1,...,1).
+  for (i in 1:gn){
+    pitmp[i] ~ dunif(0,1)
+    pi[i] <- pitmp[i]/sum(pitmp[1:gn]) #Again, why inside the loop?
+  }
+  predpi ~ dcat(pi[1:gn]) 
+  # Prior over Evidence parameter
+  v ~ dunif(1,1000)
+  # Prior over Knower level
+  for (i in 1:ns) {
+    z[i] ~ dcat(priorz[])
+  }
+  for (i in 1:nz){
+    priorz[i] <- 1/6
+  }      
+}  

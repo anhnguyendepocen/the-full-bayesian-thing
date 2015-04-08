@@ -1,0 +1,11 @@
+# Inferring the Mean and Standard Deviation of a Gaussian
+model{
+  # Data Come From A Gaussian
+  for (i in 1:n){
+    x[i] ~ dnorm(mu,lambda)
+  }
+  # Priors
+  mu <- 0
+  sigma ~ dunif(0,10)
+  lambda <- 1/pow(sigma,2)
+}
