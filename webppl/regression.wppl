@@ -1,0 +1,95 @@
+
+// webppl regression.wppl --require-js ./regutils.js
+// simple example of linear regression
+
+var d = regutils.readCSV("cars.csv").data
+
+var cars = map(
+	function(lst){
+		return _.object(_.zip(d[0],lst))
+	},
+	d.slice(1))
+
+_.pluck(cars,'dist')
+// var cars = [ { speed: '4', dist: '2' },
+//   { speed: '4', dist: '10' },
+//   { speed: '7', dist: '4' },
+//   { speed: '7', dist: '22' },
+//   { speed: '8', dist: '16' },
+//   { speed: '9', dist: '10' },
+//   { speed: '10', dist: '18' },
+//   { speed: '10', dist: '26' },
+//   { speed: '10', dist: '34' },
+//   { speed: '11', dist: '17' },
+//   { speed: '11', dist: '28' },
+//   { speed: '12', dist: '14' },
+//   { speed: '12', dist: '20' },
+//   { speed: '12', dist: '24' },
+//   { speed: '12', dist: '28' },
+//   { speed: '13', dist: '26' },
+//   { speed: '13', dist: '34' },
+//   { speed: '13', dist: '34' },
+//   { speed: '13', dist: '46' },
+//   { speed: '14', dist: '26' },
+//   { speed: '14', dist: '36' },
+//   { speed: '14', dist: '60' },
+//   { speed: '14', dist: '80' },
+//   { speed: '15', dist: '20' },
+//   { speed: '15', dist: '26' },
+//   { speed: '15', dist: '54' },
+//   { speed: '16', dist: '32' },
+//   { speed: '16', dist: '40' },
+//   { speed: '17', dist: '32' },
+//   { speed: '17', dist: '40' },
+//   { speed: '17', dist: '50' },
+//   { speed: '18', dist: '42' },
+//   { speed: '18', dist: '56' },
+//   { speed: '18', dist: '76' },
+//   { speed: '18', dist: '84' },
+//   { speed: '19', dist: '36' },
+//   { speed: '19', dist: '46' },
+//   { speed: '19', dist: '68' },
+//   { speed: '20', dist: '32' },
+//   { speed: '20', dist: '48' },
+//   { speed: '20', dist: '52' },
+//   { speed: '20', dist: '56' },
+//   { speed: '20', dist: '64' },
+//   { speed: '22', dist: '66' },
+//   { speed: '23', dist: '54' },
+//   { speed: '24', dist: '70' },
+//   { speed: '24', dist: '92' },
+//   { speed: '24', dist: '93' },
+//   { speed: '24', dist: '120' },
+//   { speed: '25', dist: '85' } ]
+
+
+var linearModel = function(){
+	var sigma = uniform(0,10)
+	var beta0 = gaussian(0,100)
+	var beta1 = gaussian(0,100)
+
+	var score = sum(map(
+		function(datum){
+			var x = datum["dist"]
+			var y = datum["speed"]
+			var lm = beta0+beta1*x
+			return gaussianERP.score([lm,sigma],y)
+		},
+		cars))
+	factor(score)
+	return [beta0, beta1]
+}
+
+
+var marginalize = function(myERP, index){
+  Enumerate(function(){
+    var x = sample(myERP)
+    return x[index]
+  })
+}
+
+
+var results = MH(linearModel, 100000)
+
+console.log("intercept =" + expectation(marginalize(results,0)))
+console.log("slope = " + expectation(marginalize(results,1)))
